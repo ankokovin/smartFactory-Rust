@@ -1,0 +1,1 @@
+wasm-pack build --scope rycarok ./smart-factory-wasm-port --dev -t web

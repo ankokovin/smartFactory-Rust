@@ -11,6 +11,9 @@ Also, one of the motivations for the previous project was a prospect of "reusing
 And the final motivation for this project is educational value. I got an itch to get a bit more into Rust.
 
 TODO:
+- [x] Implement a config for WASM compilation
+- [ ] Implement async socket server (created a sync for one client for now). Following https://youtu.be/Iapc-qGTEBQ?t=1649 
+- [ ] Port the environment class from previos TS project
 - [ ] Some more features inside the smart factory model could be nice.
 
 ## Frontend
@@ -21,5 +24,10 @@ The initial frontend is a single page based on vanila JS. The reason for not usi
 If my passion does not run out too fast, I plan to redo frontend as a React app.
 
 TODO:
+- [x] Default React App
+- [x] Import wasm module
+- [ ] Implement socket connection to server
+- [ ] Dynamic wasm import?
+- [ ] Implement an interface for agent modeling (awaiting backend)  
 - [ ] More and better stats
 - [ ] Settings storage (could also be a backend? idk)

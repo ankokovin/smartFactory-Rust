@@ -1,0 +1,15 @@
+[workspace]
+name = "smart-factory-rust"
+version = "0.1.0"
+authors = ["Aleksey Kokovin rycarok@gmail.com"]
+licence = "MIT"
+edition = "2021"
+repository = "https://github.com/ankokovin/smartFactory-Rust"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+members = [
+    "smart-factory-wasm-port",
+    "smart-factory-environment",
+    "smart-factory-server"
+]
