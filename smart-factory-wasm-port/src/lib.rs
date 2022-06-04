@@ -1,6 +1,6 @@
 extern crate wasm_bindgen;
 
-use smart_factory_environment;
+use smart_factory_environment::greet_message;
 
 use wasm_bindgen::prelude::*;
 
@@ -11,5 +11,5 @@ extern {
 
 #[wasm_bindgen]
 pub fn greet(name: &str) -> String {
-    smart_factory_environment::greet_message(name)
+    greet_message(name)
 }

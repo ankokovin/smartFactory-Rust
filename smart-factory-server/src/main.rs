@@ -1,4 +1,4 @@
-use smart_factory_environment;
+use smart_factory_environment::greet_message;
 
 use tokio::{net::TcpListener, io::{BufReader, AsyncWriteExt, AsyncBufReadExt}};
 
@@ -14,12 +14,9 @@ async fn main() {
     let mut line = String::new();
 
     loop {
-        let bytes_read = reader.read_line(&mut line).await.unwrap();
-        if bytes_read <= 0 {
-            break;
-        }
+        let _bytes_read = reader.read_line(&mut line).await.unwrap();
 
-        let response_line = smart_factory_environment::greet_message(line.as_str());
+        let response_line = greet_message(line.as_str());
         writer.write_all(response_line.as_bytes()).await.unwrap();
     }
 }
