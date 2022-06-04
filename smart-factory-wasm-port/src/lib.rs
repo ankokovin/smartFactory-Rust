@@ -10,16 +10,6 @@ extern {
 }
 
 #[wasm_bindgen]
-pub fn greet(name: &str) {
-    alert(&smart_factory_environment::greet_message(name));
-}
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
-    }
+pub fn greet(name: &str) -> String {
+    smart_factory_environment::greet_message(name)
 }
