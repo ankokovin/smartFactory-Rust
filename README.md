@@ -1,4 +1,6 @@
 # SmartFactory-revisited
+[![Rust](https://github.com/ankokovin/smartFactory-Rust/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/ankokovin/smartFactory-Rust/actions/workflows/rust.yml)
+
 This project is an attempt to [rewrite my program for master's finals](https://github.com/ankokovin/smartFactory-miltiagentagentSim).
 
 ## Backend
