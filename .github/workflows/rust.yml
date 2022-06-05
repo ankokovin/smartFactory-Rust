@@ -27,7 +27,8 @@ jobs:
             - 'smart-factory-wasm-port/**'
           server:
             - 'smart-factory-server/**'
-    - run: |
+    - name: Print changed modules
+      run: |
         echo "WASM=${{ steps.path-filter.outputs.wasm == 'true'}}"
         echo "ENVIRONMENT=${{ steps.path-filter.outputs.env == 'true'}}"
         echo "SERVER=${{ steps.path-filter.outputs.server == 'true'}}"
