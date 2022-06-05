@@ -13,15 +13,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
-      needs-wasm-compilation: ${{ steps.step1.outputs.needs-wasm-compilation}}
+      needs-wasm-compilation: ${{ steps.path-filter.outputs.env || steps.path-filter.outputs.wasm}}
     steps:
     - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
-      id: needs-wasm-compilation
+      id: path-filter
       with:
         filters: |
-          src:
+          env:
             - 'smart-factory-environment/**'
+          wasm:
             - 'smart-factory-wasm-port/**'
     - name: Build
       run: cargo build --verbose
