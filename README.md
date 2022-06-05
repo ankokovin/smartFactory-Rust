@@ -12,6 +12,7 @@ Also, one of the motivations for the previous project was a prospect of "reusing
 
 And the final motivation for this project is educational value. I got an itch to get a bit more into Rust.
 
+
 TODO:
 - [x] Implement a config for WASM compilation
 - [ ] Implement async socket server (created a sync for one client for now). Following https://youtu.be/Iapc-qGTEBQ?t=1649 
