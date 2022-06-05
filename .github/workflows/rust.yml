@@ -24,7 +24,10 @@ jobs:
             - 'smart-factory-environment/**'
           wasm:
             - 'smart-factory-wasm-port/**'
-    - run: echo  ${{ steps.path-filter.outputs.wasm == 'true'}}
+    - run: |
+        echo "WASM=${{ steps.path-filter.outputs.wasm == 'true'}}"
+        echo "ENVIRONMENT=${{ steps.path-filter.outputs.env == 'true'}}"
+        echo "SHOULD_COMPILE_WASM=${{ steps.path-filter.outputs.wasm == 'true' || steps.path-filter.outputs.env == 'true'}}"
     #- name: Build
     #  run: cargo build --verbose
     #- name: Run tests
