@@ -24,10 +24,11 @@ jobs:
             - 'smart-factory-environment/**'
           wasm:
             - 'smart-factory-wasm-port/**'
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - run: echo  ${{ steps.path-filter.outputs.env || steps.path-filter.outputs.wasm}}
+    #- name: Build
+    #  run: cargo build --verbose
+    #- name: Run tests
+    #  run: cargo test --verbose
 
   build-wasm:
     needs: build
