@@ -45,10 +45,9 @@ jobs:
 
   build-server:
     needs: change-checker
-    #if: needs.change-checker.outputs.needs-server-compilation == 'true'
+    if: needs.change-checker.outputs.needs-server-compilation == 'true'
     runs-on: ubuntu-latest
     steps:
-      - run: echo ${{needs.change-checker.outputs.needs-server-compilation}}
-      #- uses: actions/checkout@v3
-      #- name: Compile and test
-      #  run: cd smart-factory-server && cargo test --verbose
+      - uses: actions/checkout@v3
+      - name: Compile and test
+        run: cd smart-factory-server && cargo test --verbose
