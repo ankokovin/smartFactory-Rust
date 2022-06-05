@@ -13,8 +13,8 @@ jobs:
   change-checker:
     runs-on: ubuntu-latest
     outputs:
-      needs-wasm-compilation: ${{ steps.path-filter.outputs.wasm == 'true' || steps.path-filter.outputs.env == 'true'}}"
-      needs-server-compilation: ${{ steps.path-filter.outputs.server == 'true' || steps.path-filter.outputs.env == 'true'}}"
+      needs-wasm-compilation: ${{ steps.path-filter.outputs.wasm == 'true' || steps.path-filter.outputs.env == 'true'}}
+      needs-server-compilation: ${{ steps.path-filter.outputs.server == 'true' || steps.path-filter.outputs.env == 'true'}}
     steps:
     - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
