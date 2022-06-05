@@ -31,7 +31,7 @@ jobs:
 
   build-wasm:
     needs: build
-    if: needs.build.outputs.needs-wasm-compilation == 'true'
+    if: needs.build.outputs.needs-wasm-compilation
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
