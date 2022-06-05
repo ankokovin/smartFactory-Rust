@@ -12,8 +12,17 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      needs-wasm-compilation: ${{ steps.step1.outputs.needs-wasm-compilation}}
     steps:
     - uses: actions/checkout@v3
+    - uses: dorny/paths-filter@v2
+      id: needs-wasm-compilation
+      with:
+        filters: |
+          src:
+            - 'smart-factory-environment/**'
+            - 'smart-factory-wasm-port/**'
     - name: Build
       run: cargo build --verbose
     - name: Run tests
@@ -21,9 +30,10 @@ jobs:
 
   build-wasm:
     needs: build
+    if: needs.build.outputs.needs-wasm-compilation == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: jetli/wasm-pack-action@v0.3.0
-      - name: Test WASM
-        run: cd smart-factory-wasm-port && wasm-pack test --headless --chrome --firefox --node
+    - uses: actions/checkout@v3
+    - uses: jetli/wasm-pack-action@v0.3.0
+    - name: Test WASM
+      run: cd smart-factory-wasm-port && wasm-pack test --headless --chrome --firefox --node
