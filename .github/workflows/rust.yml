@@ -45,7 +45,7 @@ jobs:
 
   build-server:
     needs: change-checker
-    if: needs.change-checker.outputs.needs-server-compilation == 'true'
+    #if: needs.change-checker.outputs.needs-server-compilation == 'true'
     runs-on: ubuntu-latest
     steps:
       - run: echo ${{needs.change-checker.outputs.needs-server-compilation}}
