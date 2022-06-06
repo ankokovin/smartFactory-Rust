@@ -14,9 +14,9 @@ And the final motivation for this project is educational value. I got an itch to
 
 TODO:
 - [x] Implement a config for WASM compilation
-- [ ] Implement async socket server (created a sync for one client for now). Following https://youtu.be/Iapc-qGTEBQ?t=1649 
+- [x] Implement async socket server
 - [ ] Port the environment class from previous TS project
-- [ ] Some more features inside the smart factory model could be nice.
+- [ ] Some more features inside the smart factory model could be nice
 
 ## Frontend
 The initial frontend is a single page based on vanilla JS. The reason for not using a framework such as React was that:

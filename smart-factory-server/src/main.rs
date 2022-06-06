@@ -1,31 +1,60 @@
-use smart_factory_environment::greet_message;
+use std::any::Any;
+use std::{env, io::Error};
 
-use tokio::{net::TcpListener, io::{BufReader, AsyncWriteExt, AsyncBufReadExt}};
+use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
+use smart_factory_environment::greet_message;
+use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
-async fn main() {
-    let listener = TcpListener::bind("localhost:8080").await.unwrap();
-    
-    let (mut socket, _addr) = listener.accept().await.unwrap();
+async fn main() -> Result<(), Error> {
+    let addr = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
-    let (reader, mut writer) = socket.split();
+    // Create the event loop and TCP listener we'll accept connections on.
+    let try_socket = TcpListener::bind(&addr).await;
+    let listener = try_socket.expect("Failed to bind");
+    println!("Listening on: {}", addr);
 
-    let mut reader = BufReader::new(reader);
-    let mut line = String::new();
-
-    loop {
-        let _bytes_read = reader.read_line(&mut line).await.unwrap();
-
-        let response_line = greet_message(line.as_str());
-        writer.write_all(response_line.as_bytes()).await.unwrap();
+    while let Ok((stream, _)) = listener.accept().await {
+        tokio::spawn(accept_connection(stream));
     }
+
+    Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+async fn accept_connection(stream: TcpStream) {
+    let addr = stream
+        .peer_addr()
+        .expect("connected streams should have a peer address");
+    println!("Peer address: {}", addr);
+
+    let ws_stream = tokio_tungstenite::accept_async(stream)
+        .await
+        .expect("Error during the websocket handshake occurred");
+
+    println!("New WebSocket connection: {}", addr);
+
+    let (mut write, mut read) = ws_stream.split();
+
+    loop {
+        let msg = read.next().await;
+        match msg {
+            Some(Ok(message)) => {
+                let message = message;
+                if let tungstenite::Message::Text(message) = message {
+                    let result = write
+                        .send(tungstenite::Message::Text(greet_message(&message)))
+                        .await;
+                    if result.is_err() {
+                        println!(
+                            "Error while sending a message: {}",
+                            result.unwrap_err().to_string()
+                        );
+                    }
+                }
+            }
+            _ => break,
+        }
     }
 }

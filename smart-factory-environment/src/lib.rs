@@ -4,9 +4,10 @@ pub fn greet_message(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::greet_message;
+
     #[test]
     fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+        assert_eq!("Hello, World!", greet_message("World"));
     }
 }
