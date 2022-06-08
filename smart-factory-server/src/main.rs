@@ -1,7 +1,6 @@
-use std::any::Any;
 use std::{env, io::Error};
 
-use futures_util::{future, SinkExt, StreamExt, TryStreamExt};
+use futures_util::{SinkExt, StreamExt};
 use smart_factory_environment::greet_message;
 use tokio::net::{TcpListener, TcpStream};
 

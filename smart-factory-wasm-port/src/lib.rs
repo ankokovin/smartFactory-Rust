@@ -1,15 +1,11 @@
 extern crate wasm_bindgen;
 
-use smart_factory_environment::greet_message;
-
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
-extern {
+extern "C" {
     pub fn alert(s: &str);
-}
 
-#[wasm_bindgen]
-pub fn greet(name: &str) -> String {
-    greet_message(name)
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
 }
