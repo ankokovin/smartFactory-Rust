@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/smart-factory-wasm-port/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/smart-factory-wasm-port/tests" isTestSource="true" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/smart-factory-environment/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
