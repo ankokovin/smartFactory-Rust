@@ -1,40 +1,120 @@
+use crate::agent::{Agent, AgentToMapExt};
 use crate::environment::{AgentEnvironment, EnvironmentSettings};
-use crate::event_engine::EventEngine;
+use crate::event::{Event, EventArg};
+use crate::event_queue::EventEngineError;
+use crate::message::Message;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::time::Duration;
+use uuid::Uuid;
 
-pub struct EmptyEnvironmentSettings {}
+pub struct EmptyEnvironmentSettings {
+    pub agent_count: usize,
+}
 
 impl EnvironmentSettings for EmptyEnvironmentSettings {}
 
-pub struct EmptyEnvironment<'a, LogFunction>
-where
-    LogFunction: FnMut(&str),
-{
-    log: LogFunction,
-    event_engine: EventEngine<'a>,
+#[derive(Clone, Copy)]
+pub struct InfiniteLoopAgent {
+    id: Uuid,
+    pub was_called: bool,
 }
 
-impl<'a, LogFunction> EmptyEnvironment<'a, LogFunction> where LogFunction: FnMut(&str) {}
+impl Agent for InfiniteLoopAgent {
+    fn handle(&mut self, time: u64, _args: EventArg) -> crate::agent::NewEventsVec {
+        self.was_called = true;
+        vec![(Event::new(self.id), time + 1)]
+    }
 
-impl<LogFunction> AgentEnvironment<LogFunction, EmptyEnvironmentSettings>
-    for EmptyEnvironment<'_, LogFunction>
+    fn get_id(&self) -> Uuid {
+        self.id
+    }
+}
+
+impl InfiniteLoopAgent {
+    fn new() -> InfiniteLoopAgent {
+        InfiniteLoopAgent {
+            id: Uuid::new_v4(),
+            was_called: false,
+        }
+    }
+}
+
+pub struct InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>
 where
     LogFunction: FnMut(&str),
+    SleepFunction: Fn(std::time::Duration) -> SleepFut,
+    SleepFut: Future<Output = ()>,
 {
-    fn new(_settings: &EmptyEnvironmentSettings, mut log: LogFunction) -> Self {
+    log: LogFunction,
+    sleep: SleepFunction,
+    sender: Option<Sender<Message>>,
+    agents: Vec<InfiniteLoopAgent>,
+}
+
+impl<LogFunction, SleepFunction, SleepFut>
+    AgentEnvironment<LogFunction, SleepFunction, SleepFut, EmptyEnvironmentSettings>
+    for InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>
+where
+    LogFunction: FnMut(&str) + std::marker::Send,
+    SleepFunction: Fn(std::time::Duration) -> SleepFut,
+    SleepFut: Future<Output = ()>,
+{
+    fn new(mut log: LogFunction, sleep: SleepFunction) -> Self {
         log("Creating new environment");
         Self {
             log,
-            event_engine: EventEngine::new(Default::default()),
+            sleep,
+            sender: None,
+            agents: vec![],
         }
     }
 
-    fn run(&mut self) {
+    fn run(
+        &mut self,
+        settings: &EmptyEnvironmentSettings,
+    ) -> Pin<Box<dyn Future<Output = Result<(), EventEngineError>> + '_>> {
+        self.agents = vec![InfiniteLoopAgent::new(); settings.agent_count];
         (self.log)("Starting");
-        let _result = self.event_engine.start(Default::default());
+        let (sender, receiver) = mpsc::channel::<Message>();
+        self.sender = Some(sender.clone());
+        let event_vec = self
+            .agents
+            .iter()
+            .map(|agent| (Event::new(agent.id), 0))
+            .collect();
+        let agent_vec = self.agents.vec_mut();
+        (self.sleep)(Duration::from_millis(100));
+        return Box::pin(crate::event_queue::process_event_queue(
+            agent_vec,
+            event_vec,
+            receiver,
+            &mut self.log,
+            &mut self.sleep,
+        ));
     }
 
     fn halt(&mut self) {
-        (self.log)("Halting");
+        if self.sender.is_some() {
+            (self.log)("Halting");
+            //FIXME: handle error somehow?
+            let _send_result = self.sender.as_ref().unwrap().send(Message::Halt);
+            self.sender = None
+        }
+    }
+}
+
+impl<LogFunction, SleepFunction, SleepFut>
+    InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>
+where
+    LogFunction: FnMut(&str),
+    SleepFunction: Fn(std::time::Duration) -> SleepFut,
+    SleepFut: Future<Output = ()>,
+{
+    pub fn get_agents(&self) -> Vec<InfiniteLoopAgent> {
+        self.agents.clone()
     }
 }
 
@@ -42,39 +122,45 @@ where
 mod tests {
     use super::*;
     use crate::environment::AgentEnvironment;
+    use futures::pin_mut;
+    use std::time::Duration;
 
-    #[test]
-    pub fn when_creating_new_environment_then_call_log() {
-        let mut log_message = String::new();
+    #[tokio::test]
+    pub async fn it_runs_a_lot_without_halting() {
         let log_function = |message: &str| {
             println!("{}", message);
-            log_message = message.to_string();
         };
-        EmptyEnvironment::new(&EmptyEnvironmentSettings {}, log_function);
-        assert_eq!(log_message, "Creating new environment");
+        let sleep_function = |duration| tokio::time::sleep(duration);
+        let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep_function);
+        //assert_eq!(log_message.clone(), "Creating new environment");
+        let t = tokio::time::timeout(
+            Duration::from_secs(1),
+            //assert_eq!(log_message.clone(), "Starting");
+            environment.run(&EmptyEnvironmentSettings { agent_count: 42 }),
+        );
+        let result = t.await;
+        assert!(result.is_err())
     }
 
-    #[test]
-    pub fn when_starting_then_call_log() {
+    #[tokio::test]
+    pub async fn when_halting_then_call_log() {
         let mut log_message = String::new();
         let log_function = |message: &str| {
             println!("{}", message);
             log_message = message.to_string();
         };
-        let mut environment = EmptyEnvironment::new(&EmptyEnvironmentSettings {}, log_function);
-        environment.run();
-        assert_eq!(log_message, "Starting");
-    }
+        let sleep_function = |duration| tokio::time::sleep(duration);
+        let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep_function);
+        let run = environment.run(&EmptyEnvironmentSettings { agent_count: 1 });
 
-    #[test]
-    pub fn when_halting_then_call_log() {
-        let mut log_message = String::new();
-        let log_function = |message: &str| {
-            println!("{}", message);
-            log_message = message.to_string();
-        };
-        let mut environment = EmptyEnvironment::new(&EmptyEnvironmentSettings {}, log_function);
+        let wait = tokio::time::sleep(Duration::from_secs(1));
+        pin_mut!(wait);
+        let sel = futures::future::select(run, wait);
+        sel.await;
         environment.halt();
+        environment.get_agents().iter().for_each(|agent| {
+            assert!(agent.was_called);
+        });
         assert_eq!(log_message, "Halting");
     }
 }

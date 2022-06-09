@@ -8,3 +8,8 @@ edition = "2021"
 [dependencies]
 priority-queue = "*"
 uuid = { version="*", features=["v4","js"]}
+async-trait = "0.1.56"
+
+[dev-dependencies]
+tokio = { version="1.19.2", features=["rt", "macros", "time"]}
+futures = "0.3.21"
