@@ -10,20 +10,22 @@ pub struct EventEngine<'agent> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-enum EventEngineError {
+pub enum EventEngineError {
     EventHasNoAgent,
 }
 
+pub type EngineRunResult = Result<(), EventEngineError>;
+
 #[allow(dead_code)]
 impl<'agent> EventEngine<'agent> {
-    fn new(agents: HashMap<Uuid, &'agent mut dyn Agent>) -> EventEngine<'agent> {
+    pub fn new(agents: HashMap<Uuid, &'agent mut dyn Agent>) -> EventEngine<'agent> {
         EventEngine {
             agents,
             queue: priority_queue::PriorityQueue::new(),
         }
     }
 
-    fn start(&mut self, init_state: Vec<(Event, u64)>) -> Result<(), EventEngineError> {
+    pub fn start(&mut self, init_state: Vec<(Event, u64)>) -> EngineRunResult {
         self.queue.extend(init_state);
         loop {
             let item = self.queue.pop();

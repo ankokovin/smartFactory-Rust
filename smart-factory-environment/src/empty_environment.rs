@@ -1,30 +1,36 @@
 use crate::environment::{AgentEnvironment, EnvironmentSettings};
+use crate::event_engine::EventEngine;
 
 pub struct EmptyEnvironmentSettings {}
 
 impl EnvironmentSettings for EmptyEnvironmentSettings {}
 
-pub struct EmptyEnvironment<LogFunction>
+pub struct EmptyEnvironment<'a, LogFunction>
 where
     LogFunction: FnMut(&str),
 {
     log: LogFunction,
+    event_engine: EventEngine<'a>,
 }
 
-impl<LogFunction> EmptyEnvironment<LogFunction> where LogFunction: FnMut(&str) {}
+impl<'a, LogFunction> EmptyEnvironment<'a, LogFunction> where LogFunction: FnMut(&str) {}
 
 impl<LogFunction> AgentEnvironment<LogFunction, EmptyEnvironmentSettings>
-    for EmptyEnvironment<LogFunction>
+    for EmptyEnvironment<'_, LogFunction>
 where
     LogFunction: FnMut(&str),
 {
     fn new(_settings: &EmptyEnvironmentSettings, mut log: LogFunction) -> Self {
         log("Creating new environment");
-        Self { log }
+        Self {
+            log,
+            event_engine: EventEngine::new(Default::default()),
+        }
     }
 
     fn run(&mut self) {
         (self.log)("Starting");
+        let _result = self.event_engine.start(Default::default());
     }
 
     fn halt(&mut self) {
