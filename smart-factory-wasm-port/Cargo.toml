@@ -2,9 +2,9 @@
 name = "smart-factory-wasm-port"
 version = "0.1.2"
 edition = "2021"
-authors = ["Aleksey Kokovin rycarok@gmail.com"]
-licence = "MIT"
+license = "MIT"
 repository = "https://github.com/ankokovin/smartFactory-Rust"
+authors = ["Aleksey Kokovin rycarok@gmail.com"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

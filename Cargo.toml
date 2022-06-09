@@ -1,8 +1,6 @@
 [workspace]
-name = "smart-factory-rust"
 version = "0.1.0"
-authors = ["Aleksey Kokovin rycarok@gmail.com"]
-licence = "MIT"
+license = "MIT"
 edition = "2021"
 repository = "https://github.com/ankokovin/smartFactory-Rust"
 
@@ -13,3 +11,10 @@ members = [
     "smart-factory-environment",
     "smart-factory-server"
 ]
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+lto = true
+opt-level = 's'
