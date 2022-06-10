@@ -35,7 +35,19 @@ where
         .map(|agent| (agent.get_id(), agent))
         .collect();
     let mut i = 0;
+    let mut iter_count_sleep = ITER_COUNT_SLEEP;
+    let mut sleep_duration = Duration::from_millis(SLEEP_DURATION_MS);
     loop {
+        if let Ok(message) = receiver.try_recv() {
+            match message {
+                Message::Halt => return Ok(()),
+                Message::ChangeSleepIterCount(count) => iter_count_sleep = count,
+                Message::ChangeSleepDurationMs(sleep_ms) => {
+                    sleep_duration = Duration::from_millis(sleep_ms)
+                }
+            }
+        }
+
         let item = queue.pop();
         if item.is_none() {
             return Ok(());
@@ -49,14 +61,10 @@ where
         let new_events = agent.unwrap().handle(time, event.args);
         queue.extend(new_events);
 
-        if let Ok(_ans) = receiver.try_recv() {
-            return Ok(());
-        }
-
         i += 1;
-        if i >= ITER_COUNT_SLEEP {
+        if i >= iter_count_sleep {
             (log)("Entered sleep");
-            (sleep)(Duration::from_millis(SLEEP_DURATION_MS)).await;
+            (sleep)(sleep_duration).await;
             i = 0;
         }
     }
@@ -66,11 +74,13 @@ where
 pub mod tests {
     use crate::agent::{Agent, AgentToMapExt, NewEventsVec};
     use crate::event::{Event, EventArg, EventArgs};
-    use crate::event_queue::{process_event_queue, EventEngineError};
+    use crate::event_queue::{process_event_queue, EventEngineError, ITER_COUNT_SLEEP};
 
     use crate::message::Message;
+    use futures::pin_mut;
     use std::any::Any;
     use std::sync::mpsc;
+    use std::time::Duration;
     use uuid::Uuid;
 
     #[tokio::test]
@@ -292,7 +302,6 @@ pub mod tests {
 
                 let send_result = send.send(Message::Halt);
                 assert!(send_result.is_ok());
-
                 let result = result.await;
                 assert!(result.is_ok());
             }
@@ -300,7 +309,7 @@ pub mod tests {
 
         let mut t = Test {
             log: |_| {},
-            sleep: |_| async {},
+            sleep: |duration| tokio::time::sleep(duration),
         };
         t.run().await;
     }
@@ -390,5 +399,71 @@ pub mod tests {
         assert!(result.is_ok());
         assert_eq!(agents.get(0).unwrap().x, 42);
         assert_eq!(agents.get(1).unwrap().x, -42);
+    }
+
+    #[tokio::test]
+    pub async fn test_not_halt_does_not_kill() {
+        pub struct Test<LogFunction, SleepFunction, SleepFut>
+        where
+            LogFunction: FnMut(&str),
+            SleepFunction: Fn(std::time::Duration) -> SleepFut,
+            SleepFut: std::future::Future<Output = ()>,
+        {
+            log: LogFunction,
+            sleep: SleepFunction,
+        }
+
+        impl<LogFunction, SleepFunction, SleepFut> Test<LogFunction, SleepFunction, SleepFut>
+        where
+            LogFunction: FnMut(&str),
+            SleepFunction: Fn(std::time::Duration) -> SleepFut,
+            SleepFut: std::future::Future<Output = ()>,
+        {
+            async fn run(&mut self) {
+                pub struct InfiniteLoopAgent {
+                    id: Uuid,
+                }
+
+                impl Agent for InfiniteLoopAgent {
+                    fn handle(&mut self, time: u64, _args: EventArg) -> NewEventsVec {
+                        vec![(Event::new(self.id), time + 1)]
+                    }
+
+                    fn get_id(&self) -> Uuid {
+                        self.id
+                    }
+                }
+
+                let id = Uuid::new_v4();
+
+                let mut agent = InfiniteLoopAgent { id };
+
+                let agents = Agent::solo_vec(&mut agent);
+
+                let event = Event::new(id);
+
+                let (send, recv) = mpsc::channel();
+                let result = process_event_queue(
+                    agents,
+                    vec![(event, 0)],
+                    recv,
+                    &mut self.log,
+                    &mut self.sleep,
+                );
+
+                let send_result = send.send(Message::ChangeSleepDurationMs(50000));
+                assert!(send_result.is_ok());
+
+                let t = tokio::time::timeout(Duration::from_secs(1), result);
+                let result = t.await;
+                assert!(result.is_err());
+            }
+        }
+
+        let mut t = Test {
+            log: |_| {},
+            sleep: |duration| tokio::time::sleep(duration),
+        };
+        t.run().await;
     }
 }
