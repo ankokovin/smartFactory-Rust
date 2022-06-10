@@ -74,7 +74,7 @@ where
 pub mod tests {
     use crate::agent::{Agent, AgentToMapExt, NewEventsVec};
     use crate::event::{Event, EventArg, EventArgs};
-    use crate::event_queue::{process_event_queue, EventEngineError, ITER_COUNT_SLEEP};
+    use crate::event_queue::{process_event_queue, EventEngineError};
 
     use crate::message::Message;
     use futures::pin_mut;
@@ -251,70 +251,6 @@ pub mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_kill_from_message() {
-        pub struct Test<LogFunction, SleepFunction, SleepFut>
-        where
-            LogFunction: FnMut(&str),
-            SleepFunction: Fn(std::time::Duration) -> SleepFut,
-            SleepFut: std::future::Future<Output = ()>,
-        {
-            log: LogFunction,
-            sleep: SleepFunction,
-        }
-
-        impl<LogFunction, SleepFunction, SleepFut> Test<LogFunction, SleepFunction, SleepFut>
-        where
-            LogFunction: FnMut(&str),
-            SleepFunction: Fn(std::time::Duration) -> SleepFut,
-            SleepFut: std::future::Future<Output = ()>,
-        {
-            async fn run(&mut self) {
-                pub struct InfiniteLoopAgent {
-                    id: Uuid,
-                }
-
-                impl Agent for InfiniteLoopAgent {
-                    fn handle(&mut self, time: u64, _args: EventArg) -> NewEventsVec {
-                        vec![(Event::new(self.id), time + 1)]
-                    }
-
-                    fn get_id(&self) -> Uuid {
-                        self.id
-                    }
-                }
-
-                let id = Uuid::new_v4();
-
-                let mut agent = InfiniteLoopAgent { id };
-
-                let agents = Agent::solo_vec(&mut agent);
-
-                let event = Event::new(id);
-
-                let (send, recv) = mpsc::channel();
-                let result = process_event_queue(
-                    agents,
-                    vec![(event, 0)],
-                    recv,
-                    &mut self.log,
-                    &mut self.sleep,
-                );
-
-                let send_result = send.send(Message::Halt);
-                assert!(send_result.is_ok());
-                let result = result.await;
-                assert!(result.is_ok());
-            }
-        }
-
-        let mut t = Test {
-            log: |_| {},
-            sleep: |duration| tokio::time::sleep(duration),
-        };
-        t.run().await;
-    }
-
-    #[tokio::test]
     pub async fn test_event_args_diff_types() {
         pub struct EventInc {
             x: i64,
@@ -401,6 +337,44 @@ pub mod tests {
         assert_eq!(agents.get(1).unwrap().x, -42);
     }
 
+    pub struct InfiniteLoopAgent {
+        id: Uuid,
+    }
+
+    impl Agent for InfiniteLoopAgent {
+        fn handle(&mut self, time: u64, _args: EventArg) -> NewEventsVec {
+            vec![(Event::new(self.id), time + 1)]
+        }
+
+        fn get_id(&self) -> Uuid {
+            self.id
+        }
+    }
+
+    #[tokio::test]
+    pub async fn test_kill_from_message() {
+        let id = Uuid::new_v4();
+
+        let mut agent = InfiniteLoopAgent { id };
+
+        let agents = Agent::solo_vec(&mut agent);
+
+        let event = Event::new(id);
+
+        let (send, recv) = mpsc::channel();
+        let send_result = send.send(Message::Halt);
+        assert!(send_result.is_ok());
+        let result = process_event_queue(
+            agents,
+            vec![(event, 0)],
+            recv,
+            &mut |_| {},
+            &mut |duration| tokio::time::sleep(duration),
+        )
+        .await;
+        assert!(result.is_ok());
+    }
+
     #[tokio::test]
     pub async fn test_not_halt_does_not_kill() {
         pub struct Test<LogFunction, SleepFunction, SleepFut>
@@ -420,20 +394,6 @@ pub mod tests {
             SleepFut: std::future::Future<Output = ()>,
         {
             async fn run(&mut self) {
-                pub struct InfiniteLoopAgent {
-                    id: Uuid,
-                }
-
-                impl Agent for InfiniteLoopAgent {
-                    fn handle(&mut self, time: u64, _args: EventArg) -> NewEventsVec {
-                        vec![(Event::new(self.id), time + 1)]
-                    }
-
-                    fn get_id(&self) -> Uuid {
-                        self.id
-                    }
-                }
-
                 let id = Uuid::new_v4();
 
                 let mut agent = InfiniteLoopAgent { id };
