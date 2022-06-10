@@ -63,8 +63,7 @@ where
             return Ok(());
         }
         let (event, time) = item.unwrap();
-        let mut agent = agents.get_mut(&event.agent);
-        let agent = agent.as_deref_mut();
+        let agent = agents.get_mut(&event.agent);
         if agent.is_none() {
             return Err(EventEngineError::EventHasNoAgent);
         }

@@ -101,7 +101,7 @@ where
         self.agents = vec![InfiniteLoopAgent::new(); settings.agent_count];
         (self.log)("Starting");
         let (in_sender, in_receiver) = mpsc::channel();
-        self.sender = Some(in_sender.clone());
+        self.sender = Some(in_sender);
         let (out_sender, out_receiver) = mpsc::channel();
         self.receiver = Some(out_receiver);
         let event_vec = self
@@ -118,7 +118,7 @@ where
             &mut self.log,
             &mut self.sleep,
             settings,
-            out_sender.clone(),
+            out_sender,
         ));
     }
 
