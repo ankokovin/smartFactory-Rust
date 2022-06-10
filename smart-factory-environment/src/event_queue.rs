@@ -64,7 +64,7 @@ where
 
 #[cfg(test)]
 pub mod tests {
-    use crate::agent::{Agent, NewEventsVec};
+    use crate::agent::{Agent, AgentToMapExt, NewEventsVec};
     use crate::event::{Event, EventArg, EventArgs};
     use crate::event_queue::{process_event_queue, EventEngineError};
 
@@ -303,5 +303,92 @@ pub mod tests {
             sleep: |_| async {},
         };
         t.run().await;
+    }
+
+    #[tokio::test]
+    pub async fn test_event_args_diff_types() {
+        pub struct EventInc {
+            x: i64,
+        }
+
+        impl EventArgs for EventInc {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        pub struct EventDec {
+            x: i64,
+        }
+
+        impl EventArgs for EventDec {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+
+        pub struct TestAgent {
+            x: i64,
+            id: Uuid,
+        }
+
+        impl Agent for TestAgent {
+            fn handle(&mut self, _time: u64, args: crate::event::EventArg) -> NewEventsVec {
+                assert!(args.is_some());
+                let args = args.unwrap();
+                let args = args.as_any();
+                if let Some(arg) = args.downcast_ref::<EventInc>() {
+                    self.x += arg.x;
+                    vec![]
+                } else if let Some(arg) = args.downcast_ref::<EventDec>() {
+                    self.x -= arg.x;
+                    vec![]
+                } else {
+                    panic!()
+                }
+            }
+
+            fn get_id(&self) -> Uuid {
+                self.id
+            }
+        }
+
+        let agent_id_inc = Uuid::new_v4();
+        let agent_id_dec = Uuid::new_v4();
+
+        let mut agents = vec![
+            TestAgent {
+                x: 0,
+                id: agent_id_inc,
+            },
+            TestAgent {
+                x: 0,
+                id: agent_id_dec,
+            },
+        ];
+
+        let events = vec![
+            (
+                Event::new_with_args(agent_id_inc, Box::new(EventInc { x: 42 })),
+                0,
+            ),
+            (
+                Event::new_with_args(agent_id_dec, Box::new(EventDec { x: 42 })),
+                0,
+            ),
+        ];
+
+        let (_send, recv) = mpsc::channel();
+        let result = process_event_queue(
+            agents.mut_agent_vector(),
+            events,
+            recv,
+            &mut |_| {},
+            &mut |_| async {},
+        )
+        .await;
+        assert!(result.is_ok());
+        assert_eq!(agents.get(0).unwrap().x, 42);
+        assert_eq!(agents.get(1).unwrap().x, -42);
     }
 }
