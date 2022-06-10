@@ -1,11 +1,11 @@
 use crate::agent::Agent;
 use crate::environment::EnvironmentSettings;
 use crate::event::Event;
-use crate::message::Message;
+use crate::message::{IncomingQueueMessage, OutgoingQueueMessage};
 use priority_queue::PriorityQueue;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -17,10 +17,11 @@ pub enum EventEngineError {
 pub async fn process_event_queue<LogFunction, SleepFunction, SleepFut, Settings>(
     mut agents: Vec<&mut dyn Agent>,
     init_state: Vec<(Event, u64)>,
-    receiver: Receiver<Message>,
+    receiver: Receiver<IncomingQueueMessage>,
     log: &mut LogFunction,
     sleep: &mut SleepFunction,
     settings: Settings,
+    sender: Sender<OutgoingQueueMessage>,
 ) -> Result<(), EventEngineError>
 where
     LogFunction: FnMut(&str),
@@ -38,15 +39,18 @@ where
     let mut sleep_duration = Duration::from_millis(settings.get_sleep_ms());
     let mut max_iter_count = settings.get_max_iter();
     let mut iter_count_sleep = settings.get_iter_count();
+
+    //FIXME: handle error somehow?
+    let _result = sender.send(OutgoingQueueMessage::Started);
     loop {
         if let Ok(message) = receiver.try_recv() {
             match message {
-                Message::Halt => return Ok(()),
-                Message::ChangeSleepIterCount(count) => iter_count_sleep = count,
-                Message::ChangeSleepDurationMs(sleep_ms) => {
+                IncomingQueueMessage::Halt => return Ok(()),
+                IncomingQueueMessage::ChangeSleepIterCount(count) => iter_count_sleep = count,
+                IncomingQueueMessage::ChangeSleepDurationMs(sleep_ms) => {
                     sleep_duration = Duration::from_millis(sleep_ms)
                 }
-                Message::ChangeMaxIter(count) => max_iter_count = count,
+                IncomingQueueMessage::ChangeMaxIter(count) => max_iter_count = count,
             }
         }
 
@@ -70,6 +74,8 @@ where
         i += 1;
 
         if i % iter_count_sleep == 0 {
+            //FIXME: handle error somehow?
+            let _result = sender.send(OutgoingQueueMessage::Iter(i));
             (log)("Entered sleep");
             (sleep)(sleep_duration).await;
         }
@@ -82,8 +88,8 @@ pub mod tests {
     use crate::event::{Event, EventArg, EventArgs};
     use crate::event_queue::{process_event_queue, EventEngineError};
 
-    use crate::environment::EnvironmentSettings;
-    use crate::message::Message;
+    use crate::environment::{EnvironmentSettings, DEFAULT_ITER_COUNT_SLEEP};
+    use crate::message::{IncomingQueueMessage, OutgoingQueueMessage};
     use std::any::Any;
     use std::sync::mpsc;
     use std::time::Duration;
@@ -114,6 +120,7 @@ pub mod tests {
         let events: Vec<(Event, u64)> = vec![(Event::new(Default::default()), 1)];
         let agents = vec![];
         let (_send, recv) = mpsc::channel();
+        let (send, _recv) = mpsc::channel();
         let result = process_event_queue(
             agents,
             events,
@@ -121,6 +128,7 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettings {},
+            send,
         )
         .await;
         assert!(result.is_err());
@@ -137,6 +145,8 @@ pub mod tests {
         let agents = vec![&mut agent as &mut dyn Agent];
 
         let (_send, recv) = mpsc::channel();
+        let (out_send, out_recv) = mpsc::channel();
+
         let result = process_event_queue(
             agents,
             vec![(Event::new(agent_id), 0)],
@@ -144,11 +154,15 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettings {},
+            out_send,
         )
         .await;
 
         assert!(result.is_ok());
         assert!(agent.handler_was_called);
+        let result = out_recv.try_recv();
+        assert!(result.is_ok());
+        assert!(matches!(result.unwrap(), OutgoingQueueMessage::Started));
     }
 
     #[tokio::test]
@@ -188,6 +202,8 @@ pub mod tests {
         let init_state = vec![(Event::new(caller_uuid), 0)];
 
         let (_send, recv) = mpsc::channel();
+        let (send, _recv) = mpsc::channel();
+
         let result = process_event_queue(
             agents,
             init_state,
@@ -195,6 +211,7 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettings {},
+            send,
         )
         .await;
         assert!(result.is_ok());
@@ -246,6 +263,8 @@ pub mod tests {
         let agents = Agent::solo_vec(&mut agent);
 
         let (_send, recv) = mpsc::channel();
+        let (send, _recv) = mpsc::channel();
+
         let result = process_event_queue(
             agents,
             vec![(event, 0)],
@@ -253,6 +272,7 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettings {},
+            send,
         )
         .await;
         assert!(result.is_ok());
@@ -333,6 +353,8 @@ pub mod tests {
         ];
 
         let (_send, recv) = mpsc::channel();
+        let (send, _recv) = mpsc::channel();
+
         let result = process_event_queue(
             agents.mut_agent_vector(),
             events,
@@ -340,6 +362,7 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettings {},
+            send,
         )
         .await;
         assert!(result.is_ok());
@@ -372,7 +395,8 @@ pub mod tests {
         let event = Event::new(id);
 
         let (send, recv) = mpsc::channel();
-        let send_result = send.send(Message::Halt);
+        let (outsend, _recv) = mpsc::channel();
+        let send_result = send.send(IncomingQueueMessage::Halt);
         assert!(send_result.is_ok());
         let result = process_event_queue(
             agents,
@@ -381,6 +405,7 @@ pub mod tests {
             &mut |_| {},
             &mut |duration| tokio::time::sleep(duration),
             TestSettings {},
+            outsend,
         )
         .await;
         assert!(result.is_ok());
@@ -414,6 +439,8 @@ pub mod tests {
                 let event = Event::new(id);
 
                 let (send, recv) = mpsc::channel();
+                let (outsend, _recv) = mpsc::channel();
+
                 let result = process_event_queue(
                     agents,
                     vec![(event, 0)],
@@ -421,9 +448,10 @@ pub mod tests {
                     &mut self.log,
                     &mut self.sleep,
                     TestSettings {},
+                    outsend,
                 );
 
-                let send_result = send.send(Message::ChangeSleepDurationMs(50000));
+                let send_result = send.send(IncomingQueueMessage::ChangeSleepDurationMs(50000));
                 assert!(send_result.is_ok());
 
                 let t = tokio::time::timeout(Duration::from_secs(1), result);
@@ -457,6 +485,8 @@ pub mod tests {
         let agents = vec![&mut agent as &mut dyn Agent];
 
         let (_send, recv) = mpsc::channel();
+        let (outsend, _recv) = mpsc::channel();
+
         let result = process_event_queue(
             agents,
             vec![(Event::new(agent_id), 0)],
@@ -464,6 +494,7 @@ pub mod tests {
             &mut |_| {},
             &mut |_| async {},
             TestSettingsZeroMaxIter {},
+            outsend,
         )
         .await;
 
@@ -482,7 +513,11 @@ pub mod tests {
         let event = Event::new(id);
 
         let (send, recv) = mpsc::channel();
-        let send_result = send.send(Message::ChangeMaxIter(1000));
+        let (outsend, outrecv) = mpsc::channel();
+
+        let send_result = send.send(IncomingQueueMessage::ChangeMaxIter(
+            DEFAULT_ITER_COUNT_SLEEP * 2 - 1,
+        ));
         assert!(send_result.is_ok());
         let result = tokio::time::timeout(
             Duration::from_secs(1),
@@ -493,9 +528,16 @@ pub mod tests {
                 &mut |_| {},
                 &mut |duration| tokio::time::sleep(duration),
                 TestSettings {},
+                outsend,
             ),
         )
         .await;
         assert!(result.is_ok());
+        let result = outrecv.try_recv();
+        assert!(result.is_ok());
+
+        if let OutgoingQueueMessage::Iter(iter) = result.unwrap() {
+            assert_eq!(iter, DEFAULT_ITER_COUNT_SLEEP);
+        }
     }
 }

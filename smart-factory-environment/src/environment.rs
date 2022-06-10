@@ -2,18 +2,19 @@ use crate::event_queue::EventEngineError;
 use std::future::Future;
 use std::pin::Pin;
 
-const ITER_COUNT_SLEEP: u64 = 5000;
-const SLEEP_DURATION_MS: u64 = 100;
+pub const DEFAULT_ITER_COUNT_SLEEP: u64 = 5000;
+pub const DEFAULT_SLEEP_DURATION_MS: u64 = 100;
+pub const DEFAULT_MAX_ITER: u64 = u64::MAX;
 
 pub trait EnvironmentSettings {
     fn get_iter_count(&self) -> u64 {
-        ITER_COUNT_SLEEP
+        DEFAULT_ITER_COUNT_SLEEP
     }
     fn get_sleep_ms(&self) -> u64 {
-        SLEEP_DURATION_MS
+        DEFAULT_SLEEP_DURATION_MS
     }
     fn get_max_iter(&self) -> u64 {
-        u64::MAX
+        DEFAULT_MAX_ITER
     }
 }
 

@@ -2,11 +2,11 @@ use crate::agent::{Agent, AgentToMapExt};
 use crate::environment::{AgentEnvironment, EnvironmentSettings};
 use crate::event::{Event, EventArg};
 use crate::event_queue::EventEngineError;
-use crate::message::Message;
+use crate::message::{IncomingQueueMessage, OutgoingQueueMessage};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::mpsc;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Receiver, Sender};
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -70,7 +70,8 @@ where
 {
     log: LogFunction,
     sleep: SleepFunction,
-    sender: Option<Sender<Message>>,
+    sender: Option<Sender<IncomingQueueMessage>>,
+    pub receiver: Option<Receiver<OutgoingQueueMessage>>,
     agents: Vec<InfiniteLoopAgent>,
 }
 
@@ -88,6 +89,7 @@ where
             log,
             sleep,
             sender: None,
+            receiver: None,
             agents: vec![],
         }
     }
@@ -98,8 +100,10 @@ where
     ) -> Pin<Box<dyn Future<Output = Result<(), EventEngineError>> + '_>> {
         self.agents = vec![InfiniteLoopAgent::new(); settings.agent_count];
         (self.log)("Starting");
-        let (sender, receiver) = mpsc::channel::<Message>();
-        self.sender = Some(sender.clone());
+        let (in_sender, in_receiver) = mpsc::channel();
+        self.sender = Some(in_sender.clone());
+        let (out_sender, out_receiver) = mpsc::channel();
+        self.receiver = Some(out_receiver);
         let event_vec = self
             .agents
             .iter()
@@ -110,10 +114,11 @@ where
         return Box::pin(crate::event_queue::process_event_queue(
             agent_vec,
             event_vec,
-            receiver,
+            in_receiver,
             &mut self.log,
             &mut self.sleep,
             settings,
+            out_sender.clone(),
         ));
     }
 
@@ -121,7 +126,11 @@ where
         if self.sender.is_some() {
             (self.log)("Halting");
             //FIXME: handle error somehow?
-            let _send_result = self.sender.as_ref().unwrap().send(Message::Halt);
+            let _send_result = self
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(IncomingQueueMessage::Halt);
             self.sender = None
         }
     }
@@ -134,7 +143,7 @@ where
                 .sender
                 .as_ref()
                 .unwrap()
-                .send(Message::ChangeSleepDurationMs(time_ms));
+                .send(IncomingQueueMessage::ChangeSleepDurationMs(time_ms));
             self.sender = None
         }
     }
@@ -147,7 +156,7 @@ where
                 .sender
                 .as_ref()
                 .unwrap()
-                .send(Message::ChangeSleepIterCount(count));
+                .send(IncomingQueueMessage::ChangeSleepIterCount(count));
             self.sender = None
         }
     }
@@ -160,7 +169,7 @@ where
                 .sender
                 .as_ref()
                 .unwrap()
-                .send(Message::ChangeMaxIter(count));
+                .send(IncomingQueueMessage::ChangeMaxIter(count));
             self.sender = None
         }
     }

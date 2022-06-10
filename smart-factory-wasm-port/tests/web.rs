@@ -4,7 +4,9 @@ use smart_factory_environment::empty_environment::{
     EmptyEnvironmentSettings, InfiniteEmptyEnvironment,
 };
 use smart_factory_environment::environment::AgentEnvironment;
+use smart_factory_environment::message::OutgoingQueueMessage;
 use smart_factory_wasm_port::sleep;
+use std::sync::mpsc::TryRecvError;
 use std::time::Duration;
 use wasm_bindgen_test::*;
 
@@ -123,12 +125,18 @@ pub fn when_change_iter_then_call_log() {
 pub async fn it_runs() {
     let log_function = |message: &str| smart_factory_wasm_port::log(message);
     let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep);
-    let result = environment
-        .run(EmptyEnvironmentSettings::new(
-            0,
-            SLEEP_DURATION_MS,
-            ITER_COUNT_SLEEP,
-        ))
-        .await;
-    assert!(result.is_ok())
+    let result = environment.run(EmptyEnvironmentSettings::new(
+        0,
+        SLEEP_DURATION_MS,
+        ITER_COUNT_SLEEP,
+    ));
+    let result = result.await;
+    assert!(result.is_ok());
+    assert!(environment.receiver.is_some());
+    let receiver = environment.receiver.unwrap();
+    let _result = receiver.try_recv();
+    assert!(matches!(
+        Result::<OutgoingQueueMessage, TryRecvError>::Ok(OutgoingQueueMessage::Started),
+        _result
+    ));
 }
