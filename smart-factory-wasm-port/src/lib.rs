@@ -72,6 +72,13 @@ pub async fn sleep(duration: Duration) {
 }
 
 pub fn run_empty() {
+    const ITER_COUNT_SLEEP: u64 = 5000;
+    const SLEEP_DURATION_MS: u64 = 100;
+
     let mut env = InfiniteEmptyEnvironment::new(|message| log(message), sleep);
-    env.run(&EmptyEnvironmentSettings { agent_count: 1 });
+    env.run(EmptyEnvironmentSettings::new(
+        1,
+        SLEEP_DURATION_MS,
+        ITER_COUNT_SLEEP,
+    ));
 }

@@ -11,10 +11,30 @@ use std::time::Duration;
 use uuid::Uuid;
 
 pub struct EmptyEnvironmentSettings {
-    pub agent_count: usize,
+    agent_count: usize,
+    sleep_ms: u64,
+    iter_count: u64,
 }
 
-impl EnvironmentSettings for EmptyEnvironmentSettings {}
+impl EmptyEnvironmentSettings {
+    pub fn new(agent_count: usize, sleep_ms: u64, iter_count: u64) -> EmptyEnvironmentSettings {
+        EmptyEnvironmentSettings {
+            agent_count,
+            sleep_ms,
+            iter_count,
+        }
+    }
+}
+
+impl EnvironmentSettings for EmptyEnvironmentSettings {
+    fn get_iter_count(&self) -> u64 {
+        self.iter_count
+    }
+
+    fn get_sleep_ms(&self) -> u64 {
+        self.sleep_ms
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct InfiniteLoopAgent {
@@ -74,7 +94,7 @@ where
 
     fn run(
         &mut self,
-        settings: &EmptyEnvironmentSettings,
+        settings: EmptyEnvironmentSettings,
     ) -> Pin<Box<dyn Future<Output = Result<(), EventEngineError>> + '_>> {
         self.agents = vec![InfiniteLoopAgent::new(); settings.agent_count];
         (self.log)("Starting");
@@ -93,6 +113,7 @@ where
             receiver,
             &mut self.log,
             &mut self.sleep,
+            settings,
         ));
     }
 
@@ -101,6 +122,45 @@ where
             (self.log)("Halting");
             //FIXME: handle error somehow?
             let _send_result = self.sender.as_ref().unwrap().send(Message::Halt);
+            self.sender = None
+        }
+    }
+
+    fn change_sleep_time(&mut self, time_ms: u64) {
+        if self.sender.is_some() {
+            (self.log)("Changing sleep time");
+            //FIXME: handle error somehow?
+            let _send_result = self
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Message::ChangeSleepDurationMs(time_ms));
+            self.sender = None
+        }
+    }
+
+    fn change_sleep_iter_count(&mut self, count: u64) {
+        if self.sender.is_some() {
+            (self.log)("Changing sleep iter count");
+            //FIXME: handle error somehow?
+            let _send_result = self
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Message::ChangeSleepIterCount(count));
+            self.sender = None
+        }
+    }
+
+    fn change_max_iter_count(&mut self, count: u64) {
+        if self.sender.is_some() {
+            (self.log)("Changing max iter count");
+            //FIXME: handle error somehow?
+            let _send_result = self
+                .sender
+                .as_ref()
+                .unwrap()
+                .send(Message::ChangeMaxIter(count));
             self.sender = None
         }
     }
@@ -125,6 +185,9 @@ mod tests {
     use futures::pin_mut;
     use std::time::Duration;
 
+    const ITER_COUNT_SLEEP: u64 = 5000;
+    const SLEEP_DURATION_MS: u64 = 100;
+
     #[tokio::test]
     pub async fn it_runs_a_lot_without_halting() {
         let log_function = |message: &str| {
@@ -136,7 +199,11 @@ mod tests {
         let t = tokio::time::timeout(
             Duration::from_secs(1),
             //assert_eq!(log_message.clone(), "Starting");
-            environment.run(&EmptyEnvironmentSettings { agent_count: 42 }),
+            environment.run(EmptyEnvironmentSettings {
+                agent_count: 42,
+                sleep_ms: SLEEP_DURATION_MS,
+                iter_count: ITER_COUNT_SLEEP,
+            }),
         );
         let result = t.await;
         assert!(result.is_err())
@@ -151,7 +218,11 @@ mod tests {
         };
         let sleep_function = |duration| tokio::time::sleep(duration);
         let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep_function);
-        let run = environment.run(&EmptyEnvironmentSettings { agent_count: 1 });
+        let run = environment.run(EmptyEnvironmentSettings {
+            agent_count: 1,
+            sleep_ms: SLEEP_DURATION_MS,
+            iter_count: ITER_COUNT_SLEEP,
+        });
 
         let wait = tokio::time::sleep(Duration::from_secs(1));
         pin_mut!(wait);

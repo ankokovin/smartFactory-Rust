@@ -1,4 +1,5 @@
 use crate::agent::Agent;
+use crate::environment::EnvironmentSettings;
 use crate::event::Event;
 use crate::message::Message;
 use priority_queue::PriorityQueue;
@@ -13,20 +14,19 @@ pub enum EventEngineError {
     EventHasNoAgent,
 }
 
-const ITER_COUNT_SLEEP: u64 = 5000;
-const SLEEP_DURATION_MS: u64 = 100;
-
-pub async fn process_event_queue<LogFunction, SleepFunction, SleepFut>(
+pub async fn process_event_queue<LogFunction, SleepFunction, SleepFut, Settings>(
     mut agents: Vec<&mut dyn Agent>,
     init_state: Vec<(Event, u64)>,
     receiver: Receiver<Message>,
     log: &mut LogFunction,
     sleep: &mut SleepFunction,
+    settings: Settings,
 ) -> Result<(), EventEngineError>
 where
     LogFunction: FnMut(&str),
     SleepFunction: Fn(Duration) -> SleepFut,
     SleepFut: Future<Output = ()>,
+    Settings: EnvironmentSettings,
 {
     let mut queue = PriorityQueue::new();
     queue.extend(init_state);
@@ -35,8 +35,9 @@ where
         .map(|agent| (agent.get_id(), agent))
         .collect();
     let mut i = 0;
-    let mut iter_count_sleep = ITER_COUNT_SLEEP;
-    let mut sleep_duration = Duration::from_millis(SLEEP_DURATION_MS);
+    let mut sleep_duration = Duration::from_millis(settings.get_sleep_ms());
+    let mut max_iter_count = settings.get_max_iter();
+    let mut iter_count_sleep = settings.get_iter_count();
     loop {
         if let Ok(message) = receiver.try_recv() {
             match message {
@@ -45,7 +46,12 @@ where
                 Message::ChangeSleepDurationMs(sleep_ms) => {
                     sleep_duration = Duration::from_millis(sleep_ms)
                 }
+                Message::ChangeMaxIter(count) => max_iter_count = count,
             }
+        }
+
+        if i >= max_iter_count {
+            return Ok(());
         }
 
         let item = queue.pop();
@@ -62,10 +68,10 @@ where
         queue.extend(new_events);
 
         i += 1;
-        if i >= iter_count_sleep {
+
+        if i % iter_count_sleep == 0 {
             (log)("Entered sleep");
             (sleep)(sleep_duration).await;
-            i = 0;
         }
     }
 }
@@ -76,45 +82,55 @@ pub mod tests {
     use crate::event::{Event, EventArg, EventArgs};
     use crate::event_queue::{process_event_queue, EventEngineError};
 
+    use crate::environment::EnvironmentSettings;
     use crate::message::Message;
-    use futures::pin_mut;
     use std::any::Any;
     use std::sync::mpsc;
     use std::time::Duration;
     use uuid::Uuid;
+
+    struct TestSettings {}
+    impl EnvironmentSettings for TestSettings {}
+
+    #[derive(Copy, Clone)]
+    pub struct TestAgentWasCalled {
+        id: Uuid,
+        handler_was_called: bool,
+    }
+
+    impl Agent for TestAgentWasCalled {
+        fn handle(&mut self, _time: u64, _args: EventArg) -> NewEventsVec {
+            self.handler_was_called = true;
+            vec![]
+        }
+
+        fn get_id(&self) -> Uuid {
+            self.id
+        }
+    }
 
     #[tokio::test]
     pub async fn it_errors_when_init_event_does_not_point_to_agent() {
         let events: Vec<(Event, u64)> = vec![(Event::new(Default::default()), 1)];
         let agents = vec![];
         let (_send, recv) = mpsc::channel();
-        let result =
-            process_event_queue(agents, events, recv, &mut |_| {}, &mut |_| async {}).await;
+        let result = process_event_queue(
+            agents,
+            events,
+            recv,
+            &mut |_| {},
+            &mut |_| async {},
+            TestSettings {},
+        )
+        .await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), EventEngineError::EventHasNoAgent);
     }
 
     #[tokio::test]
     pub async fn it_calls_event_handler() {
-        #[derive(Copy, Clone)]
-        pub struct TestAgent {
-            id: Uuid,
-            handler_was_called: bool,
-        }
-
-        impl Agent for TestAgent {
-            fn handle(&mut self, _time: u64, _args: EventArg) -> NewEventsVec {
-                self.handler_was_called = true;
-                vec![]
-            }
-
-            fn get_id(&self) -> Uuid {
-                self.id
-            }
-        }
-
         let agent_id = Uuid::new_v4();
-        let mut agent = TestAgent {
+        let mut agent = TestAgentWasCalled {
             id: agent_id,
             handler_was_called: false,
         };
@@ -127,6 +143,7 @@ pub mod tests {
             recv,
             &mut |_| {},
             &mut |_| async {},
+            TestSettings {},
         )
         .await;
 
@@ -151,26 +168,10 @@ pub mod tests {
             }
         }
 
-        struct CalleeAgent {
-            id: Uuid,
-            was_called: bool,
-        }
-
-        impl Agent for CalleeAgent {
-            fn handle(&mut self, _time: u64, _args: EventArg) -> NewEventsVec {
-                self.was_called = true;
-                vec![]
-            }
-
-            fn get_id(&self) -> Uuid {
-                self.id
-            }
-        }
-
         let callee_uuid = Uuid::new_v4();
-        let mut callee_agent = CalleeAgent {
+        let mut callee_agent = TestAgentWasCalled {
             id: callee_uuid,
-            was_called: false,
+            handler_was_called: false,
         };
 
         let caller_uuid = Uuid::new_v4();
@@ -187,10 +188,17 @@ pub mod tests {
         let init_state = vec![(Event::new(caller_uuid), 0)];
 
         let (_send, recv) = mpsc::channel();
-        let result =
-            process_event_queue(agents, init_state, recv, &mut |_| {}, &mut |_| async {}).await;
+        let result = process_event_queue(
+            agents,
+            init_state,
+            recv,
+            &mut |_| {},
+            &mut |_| async {},
+            TestSettings {},
+        )
+        .await;
         assert!(result.is_ok());
-        assert!(callee_agent.was_called);
+        assert!(callee_agent.handler_was_called);
     }
 
     #[tokio::test]
@@ -244,6 +252,7 @@ pub mod tests {
             recv,
             &mut |_| {},
             &mut |_| async {},
+            TestSettings {},
         )
         .await;
         assert!(result.is_ok());
@@ -330,6 +339,7 @@ pub mod tests {
             recv,
             &mut |_| {},
             &mut |_| async {},
+            TestSettings {},
         )
         .await;
         assert!(result.is_ok());
@@ -352,7 +362,7 @@ pub mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_kill_from_message() {
+    pub async fn test_kill_from_halt_message() {
         let id = Uuid::new_v4();
 
         let mut agent = InfiniteLoopAgent { id };
@@ -370,6 +380,7 @@ pub mod tests {
             recv,
             &mut |_| {},
             &mut |duration| tokio::time::sleep(duration),
+            TestSettings {},
         )
         .await;
         assert!(result.is_ok());
@@ -409,6 +420,7 @@ pub mod tests {
                     recv,
                     &mut self.log,
                     &mut self.sleep,
+                    TestSettings {},
                 );
 
                 let send_result = send.send(Message::ChangeSleepDurationMs(50000));
@@ -425,5 +437,65 @@ pub mod tests {
             sleep: |duration| tokio::time::sleep(duration),
         };
         t.run().await;
+    }
+
+    #[tokio::test]
+    pub async fn it_respects_max_iter_count() {
+        struct TestSettingsZeroMaxIter {}
+
+        impl EnvironmentSettings for TestSettingsZeroMaxIter {
+            fn get_max_iter(&self) -> u64 {
+                0
+            }
+        }
+
+        let agent_id = Uuid::new_v4();
+        let mut agent = TestAgentWasCalled {
+            id: agent_id,
+            handler_was_called: false,
+        };
+        let agents = vec![&mut agent as &mut dyn Agent];
+
+        let (_send, recv) = mpsc::channel();
+        let result = process_event_queue(
+            agents,
+            vec![(Event::new(agent_id), 0)],
+            recv,
+            &mut |_| {},
+            &mut |_| async {},
+            TestSettingsZeroMaxIter {},
+        )
+        .await;
+
+        assert!(result.is_ok());
+        assert!(!agent.handler_was_called);
+    }
+
+    #[tokio::test]
+    pub async fn test_kill_from_max_iter_message() {
+        let id = Uuid::new_v4();
+
+        let mut agent = InfiniteLoopAgent { id };
+
+        let agents = Agent::solo_vec(&mut agent);
+
+        let event = Event::new(id);
+
+        let (send, recv) = mpsc::channel();
+        let send_result = send.send(Message::ChangeMaxIter(1000));
+        assert!(send_result.is_ok());
+        let result = tokio::time::timeout(
+            Duration::from_secs(1),
+            process_event_queue(
+                agents,
+                vec![(event, 0)],
+                recv,
+                &mut |_| {},
+                &mut |duration| tokio::time::sleep(duration),
+                TestSettings {},
+            ),
+        )
+        .await;
+        assert!(result.is_ok());
     }
 }
