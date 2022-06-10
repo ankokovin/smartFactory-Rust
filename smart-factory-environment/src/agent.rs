@@ -20,14 +20,14 @@ pub trait AgentToMapExt<TAgent>
 where
     TAgent: Agent,
 {
-    fn vec_mut(&mut self) -> Vec<&mut dyn Agent>;
+    fn mut_agent_vector(&mut self) -> Vec<&mut dyn Agent>;
 }
 
 impl<TAgent> AgentToMapExt<TAgent> for Vec<TAgent>
 where
     TAgent: Agent,
 {
-    fn vec_mut(&mut self) -> Vec<&mut dyn Agent> {
+    fn mut_agent_vector(&mut self) -> Vec<&mut dyn Agent> {
         self.iter_mut().map(|x| x as &mut dyn Agent).collect()
     }
 }

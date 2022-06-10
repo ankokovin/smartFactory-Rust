@@ -85,7 +85,7 @@ where
             .iter()
             .map(|agent| (Event::new(agent.id), 0))
             .collect();
-        let agent_vec = self.agents.vec_mut();
+        let agent_vec = self.agents.mut_agent_vector();
         (self.sleep)(Duration::from_millis(100));
         return Box::pin(crate::event_queue::process_event_queue(
             agent_vec,
