@@ -47,7 +47,7 @@ jobs:
         args: --all-features
 
   build-wasm:
-    needs: change-checker
+    needs: [change-checker, clippy]
     if: needs.change-checker.outputs.needs-wasm-compilation == 'true'
     runs-on: ubuntu-latest
     steps:
@@ -58,7 +58,7 @@ jobs:
     # TODO: publish?
 
   build-server:
-    needs: change-checker
+    needs: [change-checker, clippy]
     if: needs.change-checker.outputs.needs-server-compilation == 'true'
     runs-on: ubuntu-latest
     steps:
