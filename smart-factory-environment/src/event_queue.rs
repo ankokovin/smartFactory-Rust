@@ -5,13 +5,20 @@ use crate::message::{IncomingQueueMessage, OutgoingQueueMessage};
 use priority_queue::PriorityQueue;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SendError};
 use std::time::Duration;
 use uuid::Uuid;
 
-#[derive(Debug, PartialEq, Eq)]
+impl From<SendError<OutgoingQueueMessage>> for EventEngineError {
+    fn from(err: SendError<OutgoingQueueMessage>) -> Self {
+        EventEngineError::CouldNotCommunicate(err)
+    }
+}
+
+#[derive(Debug)]
 pub enum EventEngineError {
     EventHasNoAgent,
+    CouldNotCommunicate(SendError<OutgoingQueueMessage>)
 }
 
 pub async fn process_event_queue<LogFunction, SleepFunction, SleepFut, Settings>(
@@ -40,8 +47,8 @@ where
     let mut max_iter_count = settings.get_max_iter();
     let mut iter_count_sleep = settings.get_iter_count();
 
-    //FIXME: handle error somehow?
-    let _result = sender.send(OutgoingQueueMessage::Started);
+
+    sender.send(OutgoingQueueMessage::Started)?;
     loop {
         if let Ok(message) = receiver.try_recv() {
             match message {
@@ -73,8 +80,7 @@ where
         i += 1;
 
         if i % iter_count_sleep == 0 {
-            //FIXME: handle error somehow?
-            let _result = sender.send(OutgoingQueueMessage::Iter(i));
+            sender.send(OutgoingQueueMessage::Iter(i))?;
             (log)("Entered sleep");
             (sleep)(sleep_duration).await;
         }
@@ -130,8 +136,7 @@ pub mod tests {
             send,
         )
         .await;
-        assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), EventEngineError::EventHasNoAgent);
+        assert!(matches!(result, Err(EventEngineError::EventHasNoAgent)));
     }
 
     #[tokio::test]
