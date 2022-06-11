@@ -175,6 +175,8 @@ impl<LogFunction, SleepFunction, SleepFut> AgentEnvironment for InfiniteEmptyEnv
             self.sender = None
         }
     }
+
+    fn test(){}
 }
 
 impl<LogFunction, SleepFunction, SleepFut>
