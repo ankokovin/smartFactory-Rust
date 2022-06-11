@@ -1,3 +1,4 @@
+use std::fmt::{Display, Formatter};
 use crate::agent::{Agent, AgentToMapExt};
 use crate::environment::{AgentEnvironment, EnvironmentSettings};
 use crate::event::{Event, EventArg};
@@ -14,14 +15,16 @@ pub struct EmptyEnvironmentSettings {
     agent_count: usize,
     sleep_ms: u64,
     iter_count: u64,
+    max_iter: u64
 }
 
 impl EmptyEnvironmentSettings {
-    pub fn new(agent_count: usize, sleep_ms: u64, iter_count: u64) -> EmptyEnvironmentSettings {
+    pub fn new(agent_count: usize, sleep_ms: u64, iter_count: u64, max_iter: u64) -> EmptyEnvironmentSettings {
         EmptyEnvironmentSettings {
             agent_count,
             sleep_ms,
             iter_count,
+            max_iter
         }
     }
 }
@@ -34,17 +37,27 @@ impl EnvironmentSettings for EmptyEnvironmentSettings {
     fn get_sleep_ms(&self) -> u64 {
         self.sleep_ms
     }
+
+    fn get_max_iter(&self) -> u64 {
+        self.max_iter
+    }
 }
 
 #[derive(Clone, Copy)]
 pub struct InfiniteLoopAgent {
     id: Uuid,
-    pub was_called: bool,
+    pub counter: u64,
+}
+
+impl Display for InfiniteLoopAgent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "InfiniteLoopAgent[({}), counter={}]", self.id, self.counter)
+    }
 }
 
 impl Agent for InfiniteLoopAgent {
     fn handle(&mut self, time: u64, _args: EventArg) -> crate::agent::NewEventsVec {
-        self.was_called = true;
+        self.counter += 1;
         vec![(Event::new(self.id), time + 1)]
     }
 
@@ -54,10 +67,10 @@ impl Agent for InfiniteLoopAgent {
 }
 
 impl InfiniteLoopAgent {
-    fn new() -> InfiniteLoopAgent {
+    fn new(id: Uuid) -> InfiniteLoopAgent {
         InfiniteLoopAgent {
-            id: Uuid::new_v4(),
-            was_called: false,
+            id,
+            counter: 0
         }
     }
 }
@@ -100,7 +113,7 @@ impl<LogFunction, SleepFunction, SleepFut> AgentEnvironment for InfiniteEmptyEnv
         &mut self,
         settings: EmptyEnvironmentSettings,
     ) -> Pin<Box<dyn Future<Output = Result<(), EventEngineError>> + '_>> {
-        self.agents = vec![InfiniteLoopAgent::new(); settings.agent_count];
+        self.agents = (0..settings.agent_count).map(|_|{InfiniteLoopAgent::new(Uuid::new_v4())}).collect();
         (self.log)("Starting");
         let (in_sender, in_receiver) = mpsc::channel();
         self.sender = Some(in_sender);
@@ -188,8 +201,8 @@ where
         self.agents.clone()
     }
 
-    pub fn report(&self) -> bool {
-        self.agents.iter().all(|agent|{agent.was_called})
+    pub fn report(&self) -> u64 {
+        self.agents.iter().map(|agent|{agent.counter}).sum()
     }
 }
 
@@ -218,6 +231,7 @@ mod tests {
                 agent_count: 42,
                 sleep_ms: SLEEP_DURATION_MS,
                 iter_count: ITER_COUNT_SLEEP,
+                max_iter: u64::MAX,
             }),
         );
         let result = t.await;
@@ -234,20 +248,45 @@ mod tests {
         let sleep_function = |duration| tokio::time::sleep(duration);
         let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep_function);
         let run = environment.run(EmptyEnvironmentSettings {
-            agent_count: 1,
+            agent_count: 10,
             sleep_ms: SLEEP_DURATION_MS,
             iter_count: ITER_COUNT_SLEEP,
+            max_iter: u64::MAX,
         });
 
         let wait = tokio::time::sleep(Duration::from_secs(1));
         pin_mut!(wait);
         let sel = futures::future::select(run, wait);
         sel.await;
-        assert!(environment.report());
+        assert_ne!(environment.report(), 0);
         environment.halt();
-        environment.get_agents().iter().for_each(|agent| {
-            assert!(agent.was_called);
+        /*environment.get_agents().iter().for_each(|agent| {
+            assert_ne!(agent.counter, 0);
+        });*/
+        environment.get_agents().iter().for_each(|agent|{
+           println!("{}", agent)
         });
         assert_eq!(log_message, "Halting");
+    }
+
+    #[tokio::test]
+    pub async fn when_creating_environment_then_agents_have_unique_ids() {
+        let mut log_message = String::new();
+        let log_function = |message: &str| {
+            println!("{}", message);
+            log_message = message.to_string();
+        };
+        let sleep_function = |duration| tokio::time::sleep(duration);
+        let mut environment = InfiniteEmptyEnvironment::new(log_function, sleep_function);
+        let run = environment.run(EmptyEnvironmentSettings {
+            agent_count: 2,
+            sleep_ms: SLEEP_DURATION_MS,
+            iter_count: ITER_COUNT_SLEEP,
+            max_iter: 0,
+        }).await;
+        assert!(run.is_ok());
+        let agents = environment.get_agents();
+        assert_eq!(agents.len(), 2);
+        assert_ne!(agents.get(0).unwrap().id, agents.get(1).unwrap().id)
     }
 }
