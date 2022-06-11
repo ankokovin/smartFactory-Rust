@@ -176,7 +176,8 @@ impl<LogFunction, SleepFunction, SleepFut> AgentEnvironment for InfiniteEmptyEnv
         }
     }
 
-    fn test(){}
+
+
 }
 
 impl<LogFunction, SleepFunction, SleepFut>
