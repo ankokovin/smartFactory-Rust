@@ -36,7 +36,7 @@ jobs:
 
   clippy:
     needs: change-checker
-    if: needs-clippy
+    if: needs.change-checker.outputs.needs-clippy == 'true'
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
