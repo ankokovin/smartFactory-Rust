@@ -187,6 +187,10 @@ where
     pub fn get_agents(&self) -> Vec<InfiniteLoopAgent> {
         self.agents.clone()
     }
+
+    pub fn report(&self) -> bool {
+        self.agents.iter().all(|agent|{agent.was_called})
+    }
 }
 
 #[cfg(test)]
@@ -239,6 +243,7 @@ mod tests {
         pin_mut!(wait);
         let sel = futures::future::select(run, wait);
         sel.await;
+        assert!(environment.report());
         environment.halt();
         environment.get_agents().iter().for_each(|agent| {
             assert!(agent.was_called);
