@@ -15,6 +15,7 @@ jobs:
     outputs:
       needs-wasm-compilation: ${{ steps.path-filter.outputs.wasm == 'true' || steps.path-filter.outputs.env == 'true'}}
       needs-server-compilation: ${{ steps.path-filter.outputs.server == 'true' || steps.path-filter.outputs.env == 'true'}}
+      needs-clippy: ${{ steps.path-filter.outputs.wasm == 'true' || steps.path-filter.outputs.env == 'true' || steps.path-filter.outputs.server == 'true'}}
     steps:
     - uses: actions/checkout@v3
     - uses: dorny/paths-filter@v2
@@ -32,6 +33,18 @@ jobs:
         echo "WASM=${{ steps.path-filter.outputs.wasm == 'true'}}"
         echo "ENVIRONMENT=${{ steps.path-filter.outputs.env == 'true'}}"
         echo "SERVER=${{ steps.path-filter.outputs.server == 'true'}}"
+
+  clippy:
+    needs: change-checker
+    if: needs-clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - run: rustup component add clippy
+    - uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        args: --all-features
 
   build-wasm:
     needs: change-checker
