@@ -47,8 +47,8 @@ async fn accept_connection(stream: TcpStream) {
                         .await;
                     if result.is_err() {
                         println!(
-                            "Error while sending a message: {}",
-                            result.unwrap_err().to_string()
+                            "Error while sending a message: {:?}",
+                            result.unwrap_err()
                         );
                     }
                 }
