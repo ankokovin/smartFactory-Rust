@@ -2,9 +2,9 @@
 name = "smart-factory-wasm-port"
 version = "0.1.2"
 edition = "2021"
-authors = ["Aleksey Kokovin rycarok@gmail.com"]
-licence = "MIT"
+license = "MIT"
 repository = "https://github.com/ankokovin/smartFactory-Rust"
+authors = ["Aleksey Kokovin rycarok@gmail.com"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -15,13 +15,9 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wasm-bindgen = "0.2.80"
 smart-factory-environment = { path = "../smart-factory-environment" }
+js-sys = "0.3.57"
+wasm-bindgen-futures = "0.4.30"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
-
-[profile.dev]
-opt-level = 0
-
-[profile.release]
-lto = true
-opt-level = 's'
+futures = "0.3.21"

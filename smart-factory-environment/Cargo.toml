@@ -2,7 +2,15 @@
 name = "smart-factory-environment"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+repository = "https://github.com/ankokovin/smartFactory-Rust"
+authors = ["Aleksey Kokovin rycarok@gmail.com"]
 
 [dependencies]
+priority-queue = "*"
+uuid = { version="*", features=["v4","js"]}
+async-trait = "0.1.56"
+
+[dev-dependencies]
+tokio = { version="1.19.2", features=["rt", "macros", "time"]}
+futures = "0.3.21"

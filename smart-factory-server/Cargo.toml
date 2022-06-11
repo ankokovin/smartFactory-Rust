@@ -2,8 +2,9 @@
 name = "smart-factory-server"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+license = "MIT"
+repository = "https://github.com/ankokovin/smartFactory-Rust"
+authors = ["Aleksey Kokovin rycarok@gmail.com"]
 
 [dependencies]
 smart-factory-environment = { path = "../smart-factory-environment" }
