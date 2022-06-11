@@ -80,5 +80,6 @@ pub fn run_empty() {
         1,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        u64::MAX
     ));
 }

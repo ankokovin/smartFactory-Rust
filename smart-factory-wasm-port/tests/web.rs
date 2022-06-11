@@ -40,6 +40,7 @@ pub fn when_starting_then_call_log() {
         0,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        0
     ));
     assert_eq!(log_message, "Starting");
 }
@@ -57,12 +58,13 @@ pub async fn when_halting_then_call_log() {
         1,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        u64::MAX
     ));
     let wait = Box::pin(sleep(Duration::from_secs(1)));
     futures::future::select(run, wait).await;
     environment.halt();
     environment.get_agents().iter().for_each(|agent| {
-        assert!(agent.was_called);
+        assert_ne!(agent.counter, 0);
     });
     assert_eq!(log_message, "Halting");
 }
@@ -80,6 +82,7 @@ pub fn when_change_sleep_then_call_log() {
         0,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        0
     ));
     environment.change_sleep_time(1000);
     assert_eq!(log_message, "Changing sleep time");
@@ -98,6 +101,7 @@ pub fn when_change_sleep_iter_then_call_log() {
         0,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        0
     ));
     environment.change_sleep_iter_count(1000);
     assert_eq!(log_message, "Changing sleep iter count");
@@ -116,6 +120,7 @@ pub fn when_change_iter_then_call_log() {
         0,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        0
     ));
     environment.change_max_iter_count(1000);
     assert_eq!(log_message, "Changing max iter count");
@@ -129,6 +134,7 @@ pub async fn it_runs() {
         0,
         SLEEP_DURATION_MS,
         ITER_COUNT_SLEEP,
+        0
     ));
     let result = result.await;
     assert!(result.is_ok());
