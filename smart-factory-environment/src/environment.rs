@@ -18,18 +18,21 @@ pub trait EnvironmentSettings {
     }
 }
 
-pub trait AgentEnvironment<LogFunction, SleepFunction, SleepFut, TEnvironmentSettings>
-where
-    LogFunction: FnMut(&str) + std::marker::Send,
-    SleepFunction: Fn(std::time::Duration) -> SleepFut,
-    SleepFut: Future<Output = ()>,
-    TEnvironmentSettings: EnvironmentSettings,
+pub trait AgentEnvironment
 {
-    fn new(log: LogFunction, sleep: SleepFunction) -> Self;
+    type LogFunction: FnMut(&str) + std::marker::Send;
+    //FIXME:    I'm 99% sure that it is possible to express sleep function with only one type
+    //          However when I half-heartedly tried to eliminate type SleepFuture compiler got angry
+    //          Will probably fix later
+    type SleepFunction: Fn(std::time::Duration) -> Self::SleepFuture;
+    type SleepFuture: Future<Output = ()>;
+    type TEnvironmentSettings: EnvironmentSettings;
+
+    fn new(log: Self::LogFunction, sleep: Self::SleepFunction) -> Self;
 
     fn run(
         &mut self,
-        settings: TEnvironmentSettings,
+        settings: Self::TEnvironmentSettings,
     ) -> Pin<Box<dyn Future<Output = Result<(), EventEngineError>> + '_>>;
 
     fn halt(&mut self);

@@ -62,11 +62,11 @@ impl InfiniteLoopAgent {
     }
 }
 
-pub struct InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>
+pub struct InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFuture>
 where
     LogFunction: FnMut(&str),
-    SleepFunction: Fn(std::time::Duration) -> SleepFut,
-    SleepFut: Future<Output = ()>,
+    SleepFunction: Fn(std::time::Duration) -> SleepFuture,
+    SleepFuture: Future<Output = ()>,
 {
     log: LogFunction,
     sleep: SleepFunction,
@@ -75,14 +75,16 @@ where
     agents: Vec<InfiniteLoopAgent>,
 }
 
-impl<LogFunction, SleepFunction, SleepFut>
-    AgentEnvironment<LogFunction, SleepFunction, SleepFut, EmptyEnvironmentSettings>
-    for InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>
-where
+impl<LogFunction, SleepFunction, SleepFut> AgentEnvironment for InfiniteEmptyEnvironment<LogFunction, SleepFunction, SleepFut>where
     LogFunction: FnMut(&str) + std::marker::Send,
     SleepFunction: Fn(std::time::Duration) -> SleepFut,
     SleepFut: Future<Output = ()>,
 {
+    type LogFunction = LogFunction;
+    type SleepFunction = SleepFunction;
+    type SleepFuture = SleepFut;
+    type TEnvironmentSettings = EmptyEnvironmentSettings;
+
     fn new(mut log: LogFunction, sleep: SleepFunction) -> Self {
         log("Creating new environment");
         Self {
